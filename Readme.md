@@ -1,6 +1,5 @@
-============================================================
 Continuous and Automated IoT application deployment for For computing
-============================================================
+======================================================================
 
 This Readme file explains procedure to setup and procedure to deploy IoT applications for Fog architecture.
 
