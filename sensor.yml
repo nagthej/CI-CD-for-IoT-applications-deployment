@@ -1,0 +1,93 @@
+
+
+
+resources:
+- name: GitHub
+  type: git
+  source:
+    uri: <GitHub-repo-URL> #Example: https://github.com/nagthej/sensor
+    branch: master
+
+- name: Staging-Dockerhub
+  type: docker-image
+  source:
+    repository: <docker-hub-repository>
+    username: <docker-hub-username>
+    password: <docker-hub-password>
+
+jobs:
+- name: build-Docker-image
+  plan:
+  - get: GitHub
+    trigger: true
+  - task: build-cached-image-workspace
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: ubuntu
+
+      outputs:
+      - name: workspace
+
+      inputs:
+      - name: GitHub
+
+      run:
+        path: sh
+        #path: /bin/bash
+        args:
+        - -exc
+        - -c
+        - | 
+          output_dir=workspace
+          cat << EOF > "${output_dir}/Dockerfile"
+    
+          FROM docker.io/project31/aarch64-alpine-qemu:3.5-7
+          FROM resin/rpi-raspbian               
+          RUN [ "cross-build-start" ]
+          #ENTRYPOINT /usr/bin/entry.sh python
+          WORKDIR /app
+          #ENV /usr/bin/python /app
+          # Copy the Python Script for sensor
+         
+          ADD ./GitHub/* ./
+          #RUN cd app/ && ls
+ 
+          RUN apt-get update
+         
+          RUN apt-get -y install python python-pip python-rpi.gpio
+
+          # Trigger Python script
+          CMD ["python", "ultra_test.py"]
+
+          RUN [ "cross-build-end" ]               
+
+          EOF
+          cp -R ./GitHub "${output_dir}/GitHub"
+  
+  #Push the image to Dockerhub   
+  - put: Staging-Dockerhub
+    params:
+      build: workspace          
+  
+  #Send URL to AWS EC2
+  - task: push cmd to ec2
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: ubuntu
+      run:
+        path: sh
+        args:
+        - -exc
+        - |
+          apt-get -y update
+          apt-get -y install mosquitto mosquitto-clients
+          mosquitto_pub -h <EC2-instance-Public-URL> -t test -m "<Pull-command-of-DockerHub-repo>" #Example: "Docker pull cmpe220/sensor"
+
+
+
